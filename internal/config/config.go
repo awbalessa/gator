@@ -39,6 +39,10 @@ func (c *Config) SetUser(user string) error {
 	return nil
 }
 
+func (c *Config) GetUser() string {
+	return c.CurrentUsername
+}
+
 func getConfigFilePath() (string, error) {
 	homedir, err := os.UserHomeDir()
 	if err != nil {

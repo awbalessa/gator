@@ -1,27 +1,33 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"os"
 
 	"github.com/awbalessa/gator/internal/config"
 )
 
 func main() {
+	if len(os.Args) < 2 {
+		log.Fatal("error: command required")
+	}
 	cfg, err := config.Read()
 	if err != nil {
 		log.Fatalf("failed to read config: %v", err)
 	}
-
-	err = cfg.SetUser("aziz")
-	if err != nil {
-		log.Fatalf("error setting user to aziz: %v", err)
+	s := &state{
+		cfg: cfg,
+	}
+	cmds := commands{
+		cmdToHandler: make(map[string]func(*state, command) error),
+	}
+	cmds.register("login", handlerLogin)
+	cmd := command{
+		name: os.Args[1],
+		args: os.Args[2:],
 	}
 
-	cfg, err = config.Read()
-	if err != nil {
-		log.Fatalf("failed to read config a second time: %v", err)
+	if err = cmds.run(s, cmd); err != nil {
+		log.Fatalf("failed to run command: %v", err)
 	}
-
-	fmt.Println(cfg)
 }
