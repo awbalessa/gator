@@ -160,6 +160,28 @@ func handleFollow(s *state, cmd command) error {
 	if err != nil {
 		return fmt.Errorf("error getting feed: %v", err)
 	}
+
+	user, err := s.db.GetUser(context.Background(), s.cfg.GetUser())
+	if err != nil {
+		return fmt.Errorf("error getting user: %v", err)
+	}
+
+	params := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	}
+
+	feedFollowRow, err := s.db.CreateFeedFollow(context.Background(), params)
+	if err != nil {
+		return fmt.Errorf("error creating feed follow: %v", err)
+	}
+
+	fmt.Printf("Feed: %s\n", feedFollowRow.FeedName)
+	fmt.Printf("User: %s\n", feedFollowRow.UserName)
+	return nil
 }
 
 type commands struct {
