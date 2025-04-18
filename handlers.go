@@ -23,7 +23,7 @@ type command struct {
 	args []string
 }
 
-func handlerLogin(s *state, cmd command) error {
+func handleLogin(s *state, cmd command) error {
 	if len(cmd.args) == 0 {
 		return fmt.Errorf("username required")
 	}
@@ -43,7 +43,7 @@ func handlerLogin(s *state, cmd command) error {
 	return nil
 }
 
-func handlerRegister(s *state, cmd command) error {
+func handleRegister(s *state, cmd command) error {
 	if len(cmd.args) == 0 {
 		return fmt.Errorf("username required")
 	}
@@ -69,7 +69,7 @@ func handlerRegister(s *state, cmd command) error {
 	}
 }
 
-func handlerReset(s *state, _ command) error {
+func handleReset(s *state, _ command) error {
 	err := s.db.Reset(context.Background())
 	if err != nil {
 		return fmt.Errorf("error resetting database: %v", err)
@@ -105,16 +105,12 @@ func handleAgg(s *state, _ command) error {
 	return nil
 }
 
-func handleAddFeed(s *state, cmd command) error {
+func handleAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.args) < 2 {
 		return fmt.Errorf("feed name and url required")
 	}
 	if s.cfg.GetUser() == "" {
 		return fmt.Errorf("you must be logged in to add a feed")
-	}
-	user, err := s.db.GetUser(context.Background(), s.cfg.GetUser())
-	if err != nil {
-		return fmt.Errorf("error getting user: %v", err)
 	}
 
 	feedParams := database.CreateFeedParams{
@@ -163,7 +159,7 @@ func handleFeeds(s *state, _ command) error {
 	return nil
 }
 
-func handleFollow(s *state, cmd command) error {
+func handleFollow(s *state, cmd command, user database.User) error {
 	if len(cmd.args) < 1 {
 		return fmt.Errorf("url required")
 	}
@@ -171,11 +167,6 @@ func handleFollow(s *state, cmd command) error {
 	feed, err := s.db.GetFeedByURL(context.Background(), cmd.args[0])
 	if err != nil {
 		return fmt.Errorf("error getting feed: %v", err)
-	}
-
-	user, err := s.db.GetUser(context.Background(), s.cfg.GetUser())
-	if err != nil {
-		return fmt.Errorf("error getting user: %v", err)
 	}
 
 	params := database.CreateFeedFollowParams{
@@ -196,12 +187,7 @@ func handleFollow(s *state, cmd command) error {
 	return nil
 }
 
-func handleFollowing(s *state, _ command) error {
-	user, err := s.db.GetUser(context.Background(), s.cfg.GetUser())
-	if err != nil {
-		return fmt.Errorf("error getting user: %v", err)
-	}
-
+func handleFollowing(s *state, _ command, user database.User) error {
 	feedFollows, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
 	if err != nil {
 		return fmt.Errorf("error getting feed follows for user: %v", err)
@@ -211,6 +197,17 @@ func handleFollowing(s *state, _ command) error {
 		fmt.Println(feedFollows[i].FeedName)
 	}
 	return nil
+}
+
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		user, err := s.db.GetUser(context.Background(), s.cfg.GetUser())
+		if err != nil {
+			return fmt.Errorf("error getting user: %v", err)
+		}
+
+		return handler(s, cmd, user)
+	}
 }
 
 type commands struct {
