@@ -131,7 +131,19 @@ func handleAddFeed(s *state, cmd command) error {
 		return fmt.Errorf("error creating feed: %v", err)
 	}
 
-	fmt.Printf("Feed added successfully:\n %+v\n", feed)
+	followParams := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	}
+
+	if _, err := s.db.CreateFeedFollow(context.Background(), followParams); err != nil {
+		return fmt.Errorf("error creating feed follow record: %v", err)
+	}
+
+	fmt.Printf("Feed added & followed successfully:\n %+v\n", feed)
 	return nil
 }
 
@@ -181,6 +193,23 @@ func handleFollow(s *state, cmd command) error {
 
 	fmt.Printf("Feed: %s\n", feedFollowRow.FeedName)
 	fmt.Printf("User: %s\n", feedFollowRow.UserName)
+	return nil
+}
+
+func handleFollowing(s *state, _ command) error {
+	user, err := s.db.GetUser(context.Background(), s.cfg.GetUser())
+	if err != nil {
+		return fmt.Errorf("error getting user: %v", err)
+	}
+
+	feedFollows, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		return fmt.Errorf("error getting feed follows for user: %v", err)
+	}
+
+	for i := range feedFollows {
+		fmt.Println(feedFollows[i].FeedName)
+	}
 	return nil
 }
 
