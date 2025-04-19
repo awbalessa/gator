@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/awbalessa/gator/internal/config"
 	"github.com/awbalessa/gator/internal/database"
-	"github.com/awbalessa/gator/internal/feeds"
 	"github.com/google/uuid"
 )
 
@@ -94,14 +94,23 @@ func handleUsers(s *state, _ command) error {
 	return nil
 }
 
-func handleAgg(s *state, _ command) error {
-	exampleURL := "https://www.wagslane.dev/index.xml"
-	feed, err := feeds.FetchFeed(context.Background(), exampleURL)
-	if err != nil {
-		return err
+func handleAgg(s *state, cmd command) error {
+	if len(cmd.args) < 1 {
+		return fmt.Errorf("time between requests required")
 	}
 
-	fmt.Printf("%+v\n", *feed)
+	duration, err := time.ParseDuration(cmd.args[0])
+	if err != nil {
+		return fmt.Errorf("error parsing duration %v", err)
+	}
+
+	fmt.Printf("Collecting feeds every %s\n", cmd.args[0])
+	ticker := time.NewTicker(duration)
+	for ; ; <-ticker.C {
+		if err = scrapeFeeds(s); err != nil {
+			fmt.Printf("error scraping feed %v\n", err)
+		}
+	}
 	return nil
 }
 
@@ -196,6 +205,62 @@ func handleFollowing(s *state, _ command, user database.User) error {
 	for i := range feedFollows {
 		fmt.Println(feedFollows[i].FeedName)
 	}
+	return nil
+}
+
+func handleUnfollow(s *state, cmd command, user database.User) error {
+	if len(cmd.args) < 1 {
+		return fmt.Errorf("feed URL required")
+	}
+
+	feed, err := s.db.GetFeedByURL(context.Background(), cmd.args[0])
+	if err != nil {
+		return fmt.Errorf("error getting feel: %v", err)
+	}
+
+	deleteParams := database.DeleteByPairParams{
+		UserID: user.ID,
+		FeedID: feed.ID,
+	}
+
+	if err = s.db.DeleteByPair(context.Background(), deleteParams); err != nil {
+		return fmt.Errorf("error deleting by pair: %v", err)
+	}
+
+	fmt.Println("Feed unfollowed successfully")
+	return nil
+}
+
+func handleBrowse(s *state, cmd command, user database.User) error {
+	var limit int32
+	if len(cmd.args) == 0 {
+		limit = 2
+	} else {
+		limitStr := cmd.args[0]
+		limitInt, err := strconv.Atoi(limitStr)
+		if err != nil {
+			return fmt.Errorf("invalid number provided: %v", err)
+		}
+		limit = int32(limitInt)
+	}
+	postParams := database.GetPostsFromUserParams{
+		UserID: user.ID,
+		Limit:  limit,
+	}
+
+	posts, err := s.db.GetPostsFromUser(context.Background(), postParams)
+	if err != nil {
+		return fmt.Errorf("error getting posts from user", err)
+	}
+	for i, post := range posts {
+		fmt.Printf("\n--- Post #%d ---\n", i+1)
+		fmt.Printf("Title: %s\n", post.Title)
+		fmt.Printf("Description: %s\n", post.Description)
+		fmt.Printf("URL: %s\n", post.Url)
+		fmt.Printf("Published: %s\n", post.PublishedAt.Format(time.RFC1123))
+		fmt.Printf("Feed ID: %s\n", post.FeedID)
+	}
+
 	return nil
 }
 
